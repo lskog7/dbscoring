@@ -1,85 +1,60 @@
-# dbscoring
+# dbscoring agent instructions
 
-## Project overview
-- Repository for a university data engineering lab ("Лабораторная работа 3") on credit scoring with Apache Spark and distributed data processing.
-- Main goal: build a physical data model and update processes for client scoring attributes using three source datasets and SCD strategies.
+## Project purpose
+- Production-grade implementation of a university data engineering lab for credit scoring.
+- The project builds a physical warehouse model from source parquet datasets and provides local Polars ETL, Colab Spark parity, CLI/TUI, tests and a CatBoost ML scoring module.
 
-## Task source
-- Primary assignment: `docs/lab_3_task_1.pdf`
-- Required outcome: physical schema for sources, client attributes, and load tracking for monthly and daily updates.
+## Runtime and tooling
+- Python version is pinned to `3.12`.
+- Use `uv` for all dependency and command execution.
+- Required quality gates:
+  - `uv run ruff check .`
+  - `uv run ty check .`
+  - `uv run pytest`
+- Do not disable, delete or bypass tests.
+- Do not add local Spark/PySpark dependencies unless the project explicitly changes direction. Spark is Colab-only because this workspace has no Java/Spark runtime.
 
-## Data sources
-- Raw source datasets are in `data/sources`.
-- `data/sources/deb_cards_info` and `data/sources/credit_cards_info`
-  - Partition: `report_dt` (string)
-  - Observed load partitions: `2023-02-28`, `2023-03-31`
-  - SCD type from task: `SCD1` (monthly refresh)
-- `data/sources/client_cards_daily`
-  - Partition: `row_actual_to` (string)
-  - Observed partitions: `2023-04-03` (closed), `9999-12-31` (active/current)
-  - SCD type from task: `SCD2` (daily refresh)
+## Main commands
+- `uv run dbscoring status`
+- `uv run dbscoring warehouse build --data-root data/sources --warehouse-root data/warehouse`
+- `uv run dbscoring warehouse validate --data-root data/sources --warehouse-root data/warehouse`
+- `uv run dbscoring warehouse report --warehouse-root data/warehouse`
+- `uv run dbscoring ml make-features --warehouse-root data/warehouse --output data/ml/features.parquet`
+- `uv run dbscoring ml make-labels --warehouse-root data/warehouse --output data/ml/labels.parquet`
+- `uv run dbscoring ml train --warehouse-root data/warehouse --labels data/ml/labels.parquet --model-out models/catboost.cbm`
+- `uv run dbscoring ml predict --model models/catboost.cbm --input-path data/ml/features.parquet --output data/ml/predictions.parquet`
 
-## Intended warehouse schema (`schemas/schema_v2.drawio`)
-- `dim_sources`
-  - Source metadata table (source ID, source name/description, update frequency, technical timestamps/validity dates, etc.).
-- `dim_attributes`
-  - Attribute metadata table linked to sources (attribute ID/name/description/data type, source ID, update frequency, validity and load timestamps).
-- `client_monthly_attrs_scd1`
-  - Normalized monthly client attributes with PK on `client_id` + `attribute_id` + `report_month`, plus source + load metadata and value.
-- `client_daily_attrs_scd2`
-  - Normalized daily client attributes with SCD2 columns: `valid_from`, `valid_to`, and `row_hash_val` for change tracking.
-- `load_log`
-  - Load audit table for ETL runs (`load_status`, row counts, timing, target table, partition key, etc.).
-- FK links encoded in the diagram:
-  - `dim_sources.source_id` -> source refs in attributes and both client fact tables.
-  - `dim_attributes.attribute_id` -> attribute refs in both client fact tables.
-  - `load_log.load_id` -> row loading references in both fact tables.
+## Data contracts
+- Raw sources live under `data/sources`.
+- Monthly SCD1 sources:
+  - `credit_cards_info`
+  - `deb_cards_info`
+- Daily SCD2 source:
+  - `client_cards_daily`
+- Canonical `client_id` type is `STRING`.
+- There are 24 business attributes:
+  - 4 daily attributes from `client_cards_daily`
+  - 11 monthly attributes from `credit_cards_info`
+  - 9 monthly attributes from `deb_cards_info`
 
-## Repository structure
-- `schemas/` — data model and schema artifacts.
-- `docs/` — lab statements and documentation.
-- `data/` — input data partitions (typically ignored in git; check `.gitignore`).
-- `src/` — project code for pipelines / scoring logic.
+## Code structure
+- `src/dbscoring/contracts.py` stores source, attribute and table contracts.
+- `src/dbscoring/etl.py` stores the local Polars warehouse implementation.
+- `src/dbscoring/ml/` stores label validation, preprocessing, CatBoost, Optuna and inference.
+- `src/dbscoring/cli.py` stores the Typer + Rich CLI/TUI.
+- `notebooks/polars_lab.ipynb` is the local documented lab notebook.
+- `notebooks/spark_lab.ipynb` is the Colab-only Spark mirror notebook.
 
-## Working conventions (initial)
-- Keep data layout and processing behavior aligned with the lab statement (monthly SCD1 and daily SCD2).
-- Track source, partition, and loading metadata during all pipeline updates.
-- Treat `_SUCCESS` and partition folders under `data/sources` as artifact markers from Spark/Hive output.
+## Testing rules
+- Tests must use deterministic fixtures derived from real source schemas.
+- Keep tests strict: assert row counts, keys, schemas, statuses and failure behavior.
+- ML tests must cover pandas and polars inputs, synthetic label reproducibility, model save/load and inference.
+- Spark local execution is not expected. Local tests must check Spark notebook structure and Colab validation hooks.
 
-## UV workflow rules
-- Python runtime is pinned to 3.13 (`pyproject.toml` uses `requires-python = ">=3.13.9,<3.14"`).
-- Environment and tooling rules:
-  - Always use `uv` for Python dependency and command execution where possible.
-  - Install dependencies with `uv add` (including `--dev` for tooling packages).
-  - Runtime env created with `uv venv --python 3.13` and dependencies installed with `uv add`.
-  - Prefer the following command pattern:
-    - `uv run ruff check .` for lint checks.
-    - `uv run ty check .` for static type checks.
-    - `uv run pytest` for tests.
-  - Use scripts in `pyproject.toml`:
-    - `uv run lint`
-    - `uv run typecheck`
-    - `uv run test`
-
-## Installation
-- Preferred install path: `uv` (all operations below)
-  - Install uv:
-    - `curl -LsSf https://astral.sh/uv/install.sh | sh`
-    - fallback: `python3 -m pip install uv`
-    - verify with `uv --version`
-  - Bootstrap project:
-    - `uv venv --python 3.13`
-    - `uv sync`
-  - Recommended workflow after clone:
-    - `uv run lint`
-    - `uv run typecheck`
-    - `uv run test`
-- Fallback `pip` path (if uv is unavailable):
-  - `python3.13 -m venv .venv`
-  - `source .venv/bin/activate`
-  - `pip install numpy pandas polars pytest ruff ty`
-  - optional package install: `pip install -e .`
-  - run: `pytest`, `ruff check .`, `ty check .`
-
-## Testing setup
-- `tests/` folder is created for pytest tests and should be used for all project test modules.
+## Artifact rules
+- Do not commit generated large artifacts from:
+  - `data/warehouse/`
+  - `data/ml/`
+  - `models/`
+  - `reports/`
+- Keep notebooks and package code synchronized. Business logic should live in the package; notebooks should demonstrate and document it.

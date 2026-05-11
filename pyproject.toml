@@ -1,13 +1,22 @@
 [project]
 name = "dbscoring"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.13.9,<3.14"
+description = "Production-grade notebook and package implementation for a credit-scoring data engineering lab."
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "numpy>=2.4.4",
-    "pandas>=3.0.2",
+    "catboost>=1.2.8",
+    "numpy>=2.0",
+    "optuna>=4.0",
+    "pandas>=2.2",
     "polars>=1.40.1",
+    "pyarrow>=18.0",
+    "rich>=13.9",
+    "scikit-learn>=1.5",
+    "typer>=0.15",
 ]
+
+[project.scripts]
+dbscoring = "dbscoring.cli:app"
 
 [dependency-groups]
 dev = [
@@ -16,9 +25,13 @@ dev = [
     "ty>=0.0.34",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "RUF"]
@@ -26,6 +39,7 @@ select = ["E", "F", "I", "UP", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["src"]
 markers = [
     "quick: small deterministic tests for fast local feedback",
     "unit: isolated unit tests",
@@ -34,4 +48,3 @@ markers = [
     "slow: long-running or resource-intensive tests",
     "property: randomized property tests",
 ]
-

@@ -1,83 +1,65 @@
-# План проекта dbscoring (Lab 3)
+# dbscoring delivery plan
 
-## Сводка
-- Цель: реализовать физическую модель и ETL-процессы кредитного скоринга по заданию лабораторной работы 3 с локальным пайплайном на `polars` и зеркальной веткой для `pyspark`/Colab.
-- В качестве единой точки входа для координaции проекта используются только два файла: `PLAN.md` и `TODO.md`.
-- Основная реализация: `polars` (быстрое локальное тестирование), `pyspark` — отдельная ветка/среда для запуска в Colab.
+## Summary
+- Python `3.12` + `uv` project is the canonical environment.
+- Local runtime is `polars`; Spark is Colab-only.
+- Business logic lives in `src/dbscoring`; notebooks document and demonstrate the same logic.
+- ML uses a production label-provider contract. Synthetic labels are deterministic demo/test labels only.
 
-## Источники правды
-- Задание: `docs/lab_3_task_1.pdf`
-- Технические данные: `docs/data_description.docx`
-- Описание референс-решения: `reference/report.docx`, `reference/code.txt`
-- Архитектурная схема (истинная): `schemas/schema_v2.drawio` (`schemas/schema_v2.png`)
-- Исходные parquet данные: `data/sources/*`
+## Completed Scope
+- [x] Physical data model for all required warehouse tables.
+- [x] Polars warehouse build on real `data/sources` parquet data.
+- [x] Monthly SCD1 normalization for `credit_cards_info` and `deb_cards_info`.
+- [x] Daily SCD2 normalization for `client_cards_daily`.
+- [x] Strict `load_log`, `should_update`, idempotent rerun behavior.
+- [x] Spark Colab notebook with mirrored contracts and manifest validation.
+- [x] Python package with clean modules and CLI/TUI.
+- [x] CatBoost/Optuna ML module with source-agnostic pandas/polars inputs.
+- [x] Deterministic test fixtures derived from real source schemas.
+- [x] Contract, integration, CLI, notebook and ML tests.
+- [x] README and AGENTS updated for production workflow.
 
-## Текущее состояние
-- Проектная документация и схема собраны и зафиксированы.
-- Сырые источники уже присутствуют:
-  - `client_cards_daily` с партициями по `row_actual_to`
-  - `credit_cards_info`, `deb_cards_info` с партициями по `report_dt`
-- Кодовая база пока требует структурирования под единый `polars`-пайплайн и разбиения по этапам.
+## Public Interfaces
+- CLI:
+  - `dbscoring status`
+  - `dbscoring warehouse build`
+  - `dbscoring warehouse validate`
+  - `dbscoring warehouse report`
+  - `dbscoring ml make-features`
+  - `dbscoring ml make-labels`
+  - `dbscoring ml train`
+  - `dbscoring ml tune`
+  - `dbscoring ml predict`
+- Notebooks:
+  - `notebooks/polars_lab.ipynb`
+  - `notebooks/spark_lab.ipynb`
+- Package:
+  - `dbscoring.etl`
+  - `dbscoring.contracts`
+  - `dbscoring.ml`
+  - `dbscoring.cli`
 
-## Ключевые договорённости
-- `client_id`/`id` в целевой модели хранится как `STRING`, чтобы соответствовать фактическим данным.
-- Целевая схема — `schema_v2` (обновлённая итоговая версия).
-- Бизнес-атрибуты — только предметные колонки из источников; технические поля (`row_update_dtime`, `loading_id`, `row_hash_val`, служебные поля партиций) храним только в метаданных/`load_log`.
-- Стратегии обновления:
-  - `credit_cards_info`, `deb_cards_info` → SCD1 по месяцам.
-  - `client_cards_daily` → SCD2 по дням.
-- `load_log` является обязательной аудиторской точкой: статус, старт/финиш, количество записей, источник, партиция, целевая таблица, параметры запуска.
+## Verified Results
+- Full Polars warehouse build on real data:
+  - `dim_sources`: `3`
+  - `dim_attributes`: `24`
+  - `client_monthly_attrs_scd1`: `11,441,743`
+  - `client_daily_attrs_scd2`: `761,764`
+  - `load_log`: `6`
+- Real-data ML CLI smoke:
+  - features: `306,911`
+  - labels: `306,911`
+  - predictions: `306,911`
 
-## Архитектурный план (по этапам)
+## Quality Gates
+- [x] `uv run ruff check .`
+- [x] `uv run ty check .`
+- [x] `uv run pytest`
+- [x] Real-data CLI warehouse build.
+- [x] Real-data CLI warehouse validation.
+- [x] Real-data CLI ML feature, label, train and predict smoke run.
 
-- [x] Фаза 0. Подтверждение целевой модели и референсов
-  - Выгрузка и сверка исходных требований.
-  - Утверждение `schema_v2` как базовой модели.
-- [ ] Фаза 1. Фундамент и контракты
-  - Зафиксировать реестр источников и реестр атрибутов.
-  - Зафиксировать единый контракт источников и форматы партиций.
-  - Описать правила преобразования к нормализованной форме и схему метаданных для загрузок.
-- [ ] Фаза 2. Метаданные и слой целевой схемы
-  - Реализовать структуры/контракты для `dim_sources`, `dim_attributes`, `load_log`.
-  - Определить локальный формат хранения целевых таблиц и путь по умолчанию.
-- [ ] Фаза 3. Ingestion + контроль актуальности
-  - Реализовать чтение актуальной партиции по каждому источнику.
-  - Реализовать `should_update` и сравнение дат обновления.
-  - Реализовать базовое логирование запуска и запись в `load_log`.
-- [ ] Фаза 4. SCD1 (ежемесячный поток)
-  - Нормализация месячных атрибутов в `client_monthly_attrs_scd1`.
-  - Логика `keep_old / update / insert` для SCD1 и контроль `last_update`/`load_id`.
-  - Обновление метрик в `load_log`.
-- [ ] Фаза 5. SCD2 (ежедневный поток)
-  - Нормализация ежедневных атрибутов в `client_daily_attrs_scd2`.
-  - Формирование/закрытие версий с `valid_from`, `valid_to`, `row_hash_val`.
-  - Проверка непрерывности и актуальности текущих версий.
-- [ ] Фаза 6. Проверки и отчётность
-  - Полный комплект локальных проверок для схем, ключей и инкрементов.
-  - Проверка покрытия всех атрибутов из каждого источника.
-  - Подготовка итогового отчёта по этапам и соответствию заданию.
-- [ ] Фаза 7. Spark-ветка (Colab)
-  - Перенос той же бизнес-логики в `pyspark`.
-  - Сверка результатов `polars` и `pyspark` на одинаковых тестовых срезах.
-
-## Правила обновления `PLAN.md` и `TODO.md`
-- `PLAN.md` обновляется при:
-  - переходе между фазами,
-  - появлении новых решений,
-  - появлении рисков/блокеров.
-- `TODO.md` обновляется:
-  - в начале сессии на новый активный этап,
-  - после выполнения пункта — с фиксацией факта выполнения в `PLAN.md`,
-  - всегда содержит только атомарные задачи текущей итерации.
-
-## Риски и решения
-- Нет локального Spark: не блокирует разработку, так как ключевая реализация идёт в `polars`; Spark-ветка ведётся отдельно.
-- Возможный дрейф контрактов между `polars` и Spark: решается через чётко зафиксированные источники входа/выхода и сравнительный контроль этапа 7.
-- Смешение технических и бизнес-колонок из источников: решается через отдельный слой классификации колонок и запрет на их прямую загрузку в фактовые SCD-таблицы.
-
-## Критерии принятия готовности этапа
-- Для каждой фазы определены чёткие критерии в текущем `TODO.md`.
-- Завершение проекта — достижение статусов:
-  - все фазы 1–6 выполнены,
-  - зафиксированный локальный путь выполнения `polars`,
-  - подготовлена Spark-ветка или явный комментарий о её статусе.
+## Optional Future Work
+- Run `notebooks/spark_lab.ipynb` in Colab on the full dataset and paste the Spark manifest into a report.
+- Integrate a real external business default label dataset for production scoring.
+- Add CI with a separate Spark-capable runner if Java/Spark becomes available.

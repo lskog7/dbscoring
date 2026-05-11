@@ -1,39 +1,37 @@
-# TODO (активная итерация)
+# TODO
 
-## Текущий фокус: Фаза 1 — Фундамент и контракты
-Цель итерации: зафиксировать все минимальные контракты так, чтобы фаза 2 могла стартовать без пересмотра архитектурных решений.
+## Core Delivery
+- [x] Перевести проект на Python `3.12`.
+- [x] Обновить `pyproject.toml`, `.python-version`, `uv.lock`.
+- [x] Создать production package layout в `src/dbscoring/`.
+- [x] Вынести контракты источников, атрибутов, target tables и load log в python-модули.
+- [x] Реализовать Polars ETL package API для warehouse build/validate/report.
+- [x] Реализовать SCD1 monthly pipeline.
+- [x] Реализовать SCD2 daily pipeline.
+- [x] Реализовать строгий `load_log` и `should_update`.
+- [x] Создать `notebooks/polars_lab.ipynb` как документированную рабочую лабораторную.
+- [x] Создать `notebooks/spark_lab.ipynb` как Colab-only зеркальную Spark-лабораторную.
+- [x] Добавить Colab Spark validation cells и manifest comparison.
+- [x] Реализовать fixture generator на основе реальных parquet sample schemas.
+- [x] Написать ETL unit/integration/contract tests.
+- [x] Написать notebook structure tests.
+- [x] Реализовать `Typer + Rich` CLI/TUI.
+- [x] Добавить тесты CLI пользовательских сценариев.
+- [x] Реализовать ML label-provider interface.
+- [x] Реализовать deterministic synthetic labels только для тестов/демо.
+- [x] Реализовать source-agnostic preprocessing для pandas/polars.
+- [x] Реализовать CatBoost train/infer/save/load.
+- [x] Реализовать Optuna tuning.
+- [x] Написать ML tests.
+- [x] Обновить `README.md` с CLI и notebook examples.
+- [x] Обновить `AGENTS.md` под новые правила проекта.
+- [x] Прогнать `uv run ruff check .`.
+- [x] Прогнать `uv run ty check .`.
+- [x] Прогнать `uv run pytest`.
+- [x] Проверить warehouse CLI на реальных данных.
+- [x] Проверить ML CLI на реальных warehouse features.
 
-## Критерий завершения итерации
-- В `PLAN.md` обновлён статус фазы 1 на завершённый.
-- В `PLAN.md` создана ссылка на актуальные контракты и список бизнес-атрибутов.
-- Подготовлен минимальный список задач для фазы 2.
-
-- [ ] Сформировать реестр технических и бизнес-колонок по источникам (по фактическим схемам parquet):
-  - `client_cards_daily`
-  - `credit_cards_info`
-  - `deb_cards_info`
-- [ ] Подтвердить и записать итоговый mapping business-атрибутов в текущей инвентаризации (`24` атрибута: `11+9+4`).
-- [ ] Зафиксировать канонические имена и типы для целевых таблиц:
-  - `dim_sources`
-  - `dim_attributes`
-  - `client_monthly_attrs_scd1`
-  - `client_daily_attrs_scd2`
-  - `load_log`
-- [ ] Зафиксировать базовый путь хранения промежуточных/целевых артефактов для локального `polars`-пайплайна.
-- [ ] Определить структуру модулей `src/` для следующих компонентов:
-  - чтение источников,
-  - трансформации,
-  - правила SCD,
-  - write/load-log.
-- [ ] Согласовать формат записей `load_log` (минимальный набор полей и значения статусов).
-- [ ] Определить и записать контракт функции `should_update` (входы/выходы, пороги дат).
-- [ ] Определить критерии "источники изменились" и "источник без изменений" для локального тестирования.
-- [ ] Зафиксировать в `PLAN.md` порядок обновления:
-  1) чтение актуальной партиции,
-  2) `should_update`,
-  3) merge,
-  4) разбор на `keep_old / update / insert`,
-  5) запись и `load_log`.
-
-## Как считать задачу выполненной
-- Задача считается закрытой только после фиксации решения в `PLAN.md` и отсутствия двусмысленного трактования для команды.
+## Optional
+- [ ] Запустить `notebooks/spark_lab.ipynb` в Colab на полном датасете.
+- [ ] Подключить реальный business label dataset вместо synthetic demo labels.
+- [ ] Добавить Spark-capable CI runner, если появится Java/Spark runtime.
