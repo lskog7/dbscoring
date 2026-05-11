@@ -1,0 +1,37 @@
+[project]
+name = "dbscoring"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13.9,<3.14"
+dependencies = [
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "polars>=1.40.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "quick: small deterministic tests for fast local feedback",
+    "unit: isolated unit tests",
+    "integration: tests that validate component interactions",
+    "contract: schema/data-contract validation",
+    "slow: long-running or resource-intensive tests",
+    "property: randomized property tests",
+]
+

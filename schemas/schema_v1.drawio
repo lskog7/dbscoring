@@ -78,7 +78,7 @@
         <mxCell id="52" parent="50" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="INT source_id                                                      FK" vertex="1">
           <mxGeometry height="26" width="280" y="52" as="geometry" />
         </mxCell>
-        <mxCell id="53" parent="50" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="DATE source_report_dt" vertex="1">
+      <mxCell id="53" parent="50" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="STRING source_report_dt" vertex="1">
           <mxGeometry height="26" width="280" y="78" as="geometry" />
         </mxCell>
         <mxCell id="54" parent="50" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="TIMESTAMP load_start_time" vertex="1">
@@ -108,13 +108,13 @@
         <mxCell id="70" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;swimlaneFillColor=#ffffff;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="client_monthly_attrs_scd1" vertex="1">
           <mxGeometry height="260" width="280" x="890" y="360" as="geometry" />
         </mxCell>
-        <mxCell id="71" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="INT client_id" vertex="1">
+        <mxCell id="71" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="STRING client_id" vertex="1">
           <mxGeometry height="26" width="280" y="26" as="geometry" />
         </mxCell>
         <mxCell id="72" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="INT attribute_id                                                    FK" vertex="1">
           <mxGeometry height="26" width="280" y="52" as="geometry" />
         </mxCell>
-        <mxCell id="73" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="DATE report_month" vertex="1">
+        <mxCell id="73" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="STRING report_month" vertex="1">
           <mxGeometry height="26" width="280" y="78" as="geometry" />
         </mxCell>
         <mxCell id="74" parent="70" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="DECIMAL value_decimal" vertex="1">
@@ -138,13 +138,13 @@
         <mxCell id="90" parent="1" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;swimlaneFillColor=#ffffff;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="client_daily_attrs_scd2" vertex="1">
           <mxGeometry height="312" width="280" x="410" y="390" as="geometry" />
         </mxCell>
-        <mxCell id="91" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="INT client_id" vertex="1">
+        <mxCell id="91" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="STRING client_id" vertex="1">
           <mxGeometry height="26" width="280" y="26" as="geometry" />
         </mxCell>
         <mxCell id="92" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="INT attribute_id                                                    FK" vertex="1">
           <mxGeometry height="26" width="280" y="52" as="geometry" />
         </mxCell>
-        <mxCell id="93" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="DATE report_date" vertex="1">
+        <mxCell id="93" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="STRING report_date" vertex="1">
           <mxGeometry height="26" width="280" y="78" as="geometry" />
         </mxCell>
         <mxCell id="94" parent="90" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;metaEdit=0;opacity=90;strokeColor=default;" value="DECIMAL value_decimal" vertex="1">

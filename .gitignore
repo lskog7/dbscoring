@@ -219,3 +219,6 @@ __marimo__/
 
 # Custom
 data/sources/
+.cursor/
+.DS_Store
+*.bkp
