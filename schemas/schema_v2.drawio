@@ -236,9 +236,6 @@
         <mxCell id="1leQ2E3DWhtW-OLmJbSA-211" value="TIMESTAMP valid_to" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="-70" y="-302" width="300" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="1leQ2E3DWhtW-OLmJbSA-212" value="BOOLEAN is_current" style="text;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;shadow=0;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="-70" y="-276" width="300" height="26" as="geometry" />
-        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

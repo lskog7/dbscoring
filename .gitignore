@@ -218,12 +218,9 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Custom
-data/warehouse/
-data/warehouse_spark/
-data/ml/
+data/
 models/
 reports/
-data/sources/
 .cursor/
 .DS_Store
 *.bkp
