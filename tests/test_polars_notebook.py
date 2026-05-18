@@ -1,3 +1,5 @@
+"""Интеграционные сценарии для Polars notebook, повторяющие основной warehouse-контракт."""
+
 from __future__ import annotations
 
 import polars as pl

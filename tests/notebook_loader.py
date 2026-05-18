@@ -1,3 +1,5 @@
+"""Утилиты для чтения, частичного импорта и полного исполнения notebook как источника кода."""
+
 from __future__ import annotations
 
 import json

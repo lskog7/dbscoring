@@ -1,3 +1,5 @@
+"""Unit-тесты отдельных Spark notebook-функций без полного интеграционного прогона."""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,20 +1,31 @@
 # Report Requirements
 
-This file captures deferred report requirements for the Ayrapetyan lab so they are not lost during current implementation work.
+## Назначение файла
 
-## Status
+Файл фиксирует требования к будущему итоговому отчёту по лабораторной работе, чтобы они не потерялись на фоне
+текущей реализации notebook и тестового контура.
 
-These items are not required right now, but they will be needed later when preparing the final report.
+## Актуальный статус
 
-## Required Sections
+Требования отчёта не входят в runtime-контур Spark/Polars хранилища, но должны учитываться при финальной сдаче.
 
-The report for Ayrapetyan's lab should include:
+## Обязательные разделы отчёта
 
-- Title page.
-- Physical data model.
-- Description of the physical model as required by the assignment.
-- Code block diagram.
+Отчёт должен включать:
 
-## Exclusions
+- титульный лист;
+- физическую модель данных;
+- описание физической модели в формулировке, требуемой заданием;
+- блок-схему кода.
 
-- The source code itself should not be included in the report.
+## Откуда брать материалы для отчёта
+
+- физическую модель данных — из [schemas/schema_v3.drawio](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/schemas/schema_v3.drawio) и [schemas/schema_v3.png](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/schemas/schema_v3.png);
+- описание логики загрузки и структуры модулей — из [README.md](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/README.md), [notebooks/README.md](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/notebooks/README.md) и docstring внутри notebook;
+- сведения о тестовом контуре и воспроизводимости — из [tests/README.md](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/README.md).
+
+## Что не включать в отчёт
+
+- исходный код целиком;
+- служебные кэши и локальные виртуальные окружения;
+- промежуточные debug-артефакты warehouse.

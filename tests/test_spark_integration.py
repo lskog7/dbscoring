@@ -1,3 +1,5 @@
+"""Полные интеграционные сценарии для Spark notebook и инкрементального warehouse-контура."""
+
 from __future__ import annotations
 
 import os

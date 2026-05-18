@@ -218,8 +218,10 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Custom
-data/
-models/
+data/*
+!data/README.md
+models/*
+!models/README.md
 reports/
 .cursor/
 .DS_Store

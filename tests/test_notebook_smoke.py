@@ -1,3 +1,5 @@
+"""Smoke-тесты полного исполнения Spark и Polars notebook как пользовательских артефактов."""
+
 from __future__ import annotations
 
 import pytest

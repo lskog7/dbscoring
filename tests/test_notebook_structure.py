@@ -1,3 +1,5 @@
+"""Структурные проверки notebook: теги ячеек, docstring и наличие финального запуска."""
+
 from __future__ import annotations
 
 import ast

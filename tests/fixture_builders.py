@@ -1,3 +1,5 @@
+"""Построение синтетических parquet fixtures и чтение partitioned-output таблиц для тестов."""
+
 from __future__ import annotations
 
 import datetime as dt

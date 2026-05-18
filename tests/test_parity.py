@@ -1,3 +1,5 @@
+"""Parity-проверка Spark и Polars по канонизированному бизнес-результату и техтаблицам."""
+
 from __future__ import annotations
 
 import os
