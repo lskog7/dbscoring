@@ -1,0 +1,19 @@
+[project]
+name = "dbscoring-spark-labs"
+version = "0.1.0"
+description = "Incremental Spark SQL and Polars warehouse labs."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "nbformat>=5.10,<6",
+    "polars>=1.30,<2",
+    "pytest>=8.3,<9",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+markers = [
+    "spark: tests that require a local Spark runtime",
+    "smoke: notebook smoke tests",
+    "parity: Spark and Polars parity tests",
+]
