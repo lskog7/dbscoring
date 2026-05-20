@@ -725,9 +725,20 @@ FROM (
 WHERE rn = 1
 ''')
 
+# Комментарий: Spark не даёт overwrite таблицы, если новый DataFrame читает её же.
+# Поэтому сначала кэшируем итоговые view и принудительно считаем строки:
+# так Spark материализует результат, а потом спокойно перезаписывает таблицу.
+spark.sql('CACHE TABLE client_monthly_attrs_scd1_new')
+spark.sql('CACHE TABLE client_daily_attrs_scd2_new')
+spark.sql('SELECT COUNT(*) FROM client_monthly_attrs_scd1_new').show(truncate=False)
+spark.sql('SELECT COUNT(*) FROM client_daily_attrs_scd2_new').show(truncate=False)
+
 # Комментарий: перезаписываем итоговые таблицы (учебный вариант update).
 spark.sql(f'INSERT OVERWRITE TABLE {DATABASE_NAME}.client_monthly_attrs_scd1 SELECT * FROM client_monthly_attrs_scd1_new')
 spark.sql(f'INSERT OVERWRITE TABLE {DATABASE_NAME}.client_daily_attrs_scd2 SELECT * FROM client_daily_attrs_scd2_new')
+
+spark.sql('UNCACHE TABLE client_monthly_attrs_scd1_new')
+spark.sql('UNCACHE TABLE client_daily_attrs_scd2_new')
 
 # Комментарий: пишем log только для реально выгруженных блоков.
 if not credit_loaded:
