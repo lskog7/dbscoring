@@ -220,6 +220,11 @@ __marimo__/
 # Custom
 data/*
 !data/README.md
+!data/test_sources/
+!data/test_sources/**/
+!data/test_sources/**/*.parquet
+!data/test_sources/**/_SUCCESS
+data/test_sources/**/*.crc
 models/*
 !models/README.md
 reports/
@@ -227,3 +232,6 @@ reports/
 .DS_Store
 *.bkp
 data.zip
+data/
+models/
+warehouse/

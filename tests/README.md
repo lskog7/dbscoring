@@ -11,7 +11,7 @@
 - notebook остаётся source of truth;
 - тесты извлекают код из `bootstrap` и `function_defs`-ячеек;
 - smoke-сценарии выполняют notebook целиком;
-- parity-сценарий сравнивает Spark и Polars по канонизированному бизнес-результату.
+- Spark-сценарии проверяют контракт warehouse без альтернативного движка.
 
 ## Файлы
 
@@ -34,6 +34,8 @@
 
 Содержит:
 
+- построение bounded-копии реальных `data/sources` с лимитом строк на каждую физическую партицию;
+- использование `data/test_sources`, если этот малый реальный срез уже материализован в репозитории;
 - построение синтетических строк источников;
 - создание исходных partition directories;
 - сценарий добавления новой monthly-партиции;
@@ -44,7 +46,7 @@
 
 Структурные проверки notebook:
 
-- наличие examples после каждой function cell;
+- отсутствие `examples`-ячеек;
 - наличие docstring у всех функций;
 - наличие ровно одной `final_run`-ячейки.
 
@@ -52,39 +54,45 @@
 
 Unit-тесты Spark notebook-функций без полного интеграционного прогона.
 
+### [test_warehouse.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_warehouse.py)
+
+Прямые тесты helper-функций warehouse-слоя:
+
+- маппинг Spark-типов;
+- построение схем;
+- инициализация parquet-таблиц;
+- загрузка малых справочников.
+
+### [test_cli.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_cli.py)
+
+Проверки CLI-контракта:
+
+- разбор аргументов;
+- JSON-вывод;
+- корректное завершение Spark runtime.
+
 ### [test_spark_integration.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_spark_integration.py)
 
 Полный Spark integration-test набор:
 
+- bounded-прогон на реальных parquet-источниках без чтения полного объёма;
 - первичная загрузка;
 - повторный idempotent run;
 - инкрементальная monthly-партиция;
 - fail-fast на изменённой старой партиции;
 - debug rebuild.
 
-### [test_polars_notebook.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_polars_notebook.py)
-
-Аналогичный набор для Polars notebook.
-
 ### [test_notebook_smoke.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_notebook_smoke.py)
 
-Smoke-проверки полного исполнения notebook как пользовательского артефакта.
+Smoke-проверки полного исполнения:
 
-### [test_parity.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_parity.py)
-
-Parity-проверка Spark и Polars.
-
-Нормализует:
-
-- временные значения;
-- строковое представление чисел вроде `1` и `1.0`;
-- partition columns, восстановленные из путей parquet-файлов.
+- Spark src-контура;
+- реального `spark_lab.ipynb` как пользовательского артефакта.
 
 ## Маркеры pytest
 
 - `spark` — тест требует локальный Spark runtime;
 - `smoke` — полное выполнение notebook;
-- `parity` — междвижковое сравнение Spark и Polars.
 
 ## Базовая команда запуска
 

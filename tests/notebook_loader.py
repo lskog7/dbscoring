@@ -11,7 +11,6 @@ from typing import Iterable
 ROOT_DIR = Path(__file__).resolve().parents[1]
 NOTEBOOK_DIR = ROOT_DIR / "notebooks"
 SPARK_NOTEBOOK_PATH = NOTEBOOK_DIR / "spark_lab.ipynb"
-POLARS_NOTEBOOK_PATH = NOTEBOOK_DIR / "polars_lab.ipynb"
 
 
 def read_notebook(notebook_path: Path) -> dict:
@@ -38,20 +37,22 @@ def load_namespace(notebook_path: Path, allowed_tags: tuple[str, ...] = ("bootst
     return namespace
 
 
-def execute_notebook(notebook_path: Path, extra_env: dict[str, str] | None = None) -> dict:
+def execute_notebook(
+    notebook_path: Path,
+    cwd: Path | None = None,
+) -> dict:
     notebook = read_notebook(notebook_path)
     namespace: dict = {"__name__": f"executed_{notebook_path.stem}"}
-    original_env = os.environ.copy()
+    original_cwd = Path.cwd()
 
     try:
-        if extra_env:
-            os.environ.update({key: str(value) for key, value in extra_env.items()})
+        if cwd is not None:
+            os.chdir(cwd)
 
         for index, cell in iter_code_cells(notebook):
             source = "".join(cell["source"])
             exec(compile(source, f"{notebook_path.name}:cell_{index}", "exec"), namespace)
     finally:
-        os.environ.clear()
-        os.environ.update(original_env)
+        os.chdir(original_cwd)
 
     return namespace

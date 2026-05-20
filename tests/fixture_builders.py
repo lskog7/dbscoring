@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 import datetime as dt
+import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 
-import polars as pl
+from tests.notebook_loader import ROOT_DIR, SPARK_NOTEBOOK_PATH, load_namespace
 
-from tests.notebook_loader import SPARK_NOTEBOOK_PATH, load_namespace
-
-
-SPARK_NOTEBOOK_NAMESPACE = load_namespace(SPARK_NOTEBOOK_PATH)
-SOURCE_REGISTRY = SPARK_NOTEBOOK_NAMESPACE["SOURCE_REGISTRY"]
+if TYPE_CHECKING:
+    from pyspark.sql import SparkSession
 
 
-def _build_source_row(source_name: str, record_id: str, loading_id: int, row_hash_val: str, **overrides: Any) -> dict[str, Any]:
+NOTEBOOK_NAMESPACE = load_namespace(SPARK_NOTEBOOK_PATH)
+SOURCE_REGISTRY = NOTEBOOK_NAMESPACE["SOURCES"]
+REAL_SOURCES_ROOT = ROOT_DIR / "data" / "sources"
+BOUNDED_REAL_SOURCES_ROOT = ROOT_DIR / "data" / "test_sources"
+TEST_SOURCE_PARTITION_ROW_LIMIT = 20
+
+
+
+def _build_source_row(source_name: str, record_id: int, loading_id: int, row_hash_val: str, **overrides: Any) -> dict[str, Any]:
     source_meta = SOURCE_REGISTRY[source_name]
     row = {column_name: None for column_name in source_meta["columns"]}
     row.update(
@@ -32,26 +39,85 @@ def _build_source_row(source_name: str, record_id: str, loading_id: int, row_has
     return row
 
 
-def write_partition(sources_root: Path, source_name: str, partition_value: str, rows: list[dict[str, Any]]) -> Path:
+def _write_rows_to_parquet(
+    spark: SparkSession,
+    output_dir: Path,
+    rows: list[dict[str, Any]],
+    mode: str,
+) -> None:
+    spark.createDataFrame(rows).coalesce(1).write.mode(mode).parquet(str(output_dir))
+
+
+def build_limited_real_sources(
+    spark: SparkSession,
+    sources_root: Path,
+    real_sources_root: Path | None = None,
+    row_limit: int = TEST_SOURCE_PARTITION_ROW_LIMIT,
+) -> dict[tuple[str, str], int]:
+    """Build a small parquet source tree from real project data for fast Spark tests."""
+    real_sources_root = real_sources_root or (
+        BOUNDED_REAL_SOURCES_ROOT if BOUNDED_REAL_SOURCES_ROOT.exists() else REAL_SOURCES_ROOT
+    )
+    if row_limit < 1 or row_limit > 1000:
+        raise ValueError("row_limit must be between 1 and 1000")
+    if not real_sources_root.exists():
+        raise FileNotFoundError(f"Real source data directory does not exist: {real_sources_root}")
+
+    if sources_root.exists():
+        shutil.rmtree(sources_root)
+    sources_root.mkdir(parents=True, exist_ok=True)
+
+    row_counts: dict[tuple[str, str], int] = {}
+    for source_name, source_meta in SOURCE_REGISTRY.items():
+        real_source_dir = real_sources_root / source_name
+        if not real_source_dir.exists():
+            raise FileNotFoundError(f"Real source directory does not exist: {real_source_dir}")
+
+        target_source_dir = sources_root / source_name
+        target_source_dir.mkdir(parents=True, exist_ok=True)
+        partition_dirs = sorted(path for path in real_source_dir.iterdir() if path.is_dir() and not path.name.startswith("."))
+        if not partition_dirs:
+            raise FileNotFoundError(f"Real source directory has no partitions: {real_source_dir}")
+
+        for partition_dir in partition_dirs:
+            target_partition_dir = target_source_dir / partition_dir.name
+            limited_df = spark.read.parquet(str(partition_dir)).limit(row_limit)
+            row_count = limited_df.count()
+            if row_count > row_limit:
+                raise AssertionError(f"{partition_dir} produced {row_count} rows, limit is {row_limit}")
+            limited_df.coalesce(1).write.mode("overwrite").parquet(str(target_partition_dir))
+            row_counts[(source_name, partition_dir.name)] = row_count
+
+    return row_counts
+
+
+def write_partition(
+    spark: SparkSession,
+    sources_root: Path,
+    source_name: str,
+    partition_value: str,
+    rows: list[dict[str, Any]],
+) -> Path:
     partition_key = SOURCE_REGISTRY[source_name]["partition_key"]
     partition_dir = sources_root / source_name / f"{partition_key}='{partition_value}'"
     partition_dir.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame(rows).write_parquet(partition_dir / "part-00000.parquet")
+    _write_rows_to_parquet(spark, partition_dir, rows, mode="overwrite")
     return partition_dir
 
 
-def build_sample_sources(sources_root: Path) -> None:
+def build_sample_sources(spark: SparkSession, sources_root: Path) -> None:
     for source_name in SOURCE_REGISTRY:
         (sources_root / source_name).mkdir(parents=True, exist_ok=True)
 
     write_partition(
+        spark,
         sources_root,
         "credit_cards_info",
         "2024-03-31",
         [
             _build_source_row(
                 "credit_cards_info",
-                record_id="C100",
+                record_id=100,
                 loading_id=201,
                 row_hash_val="credit-20240331-C100",
                 client_income_amt=120000.0,
@@ -69,13 +135,14 @@ def build_sample_sources(sources_root: Path) -> None:
         ],
     )
     write_partition(
+        spark,
         sources_root,
         "deb_cards_info",
         "2024-03-31",
         [
             _build_source_row(
                 "deb_cards_info",
-                record_id="C100",
+                record_id=100,
                 loading_id=202,
                 row_hash_val="debit-20240331-C100",
                 onl_bank_active_1m_nfalg=1,
@@ -92,13 +159,14 @@ def build_sample_sources(sources_root: Path) -> None:
         ],
     )
     write_partition(
+        spark,
         sources_root,
         "client_cards_daily",
         "2024-03-31",
         [
             _build_source_row(
                 "client_cards_daily",
-                record_id="C100",
+                record_id=100,
                 loading_id=203,
                 row_hash_val="daily-20240331-C100",
                 srv_mb_nflag=1,
@@ -112,15 +180,16 @@ def build_sample_sources(sources_root: Path) -> None:
     )
 
 
-def add_second_monthly_partition(sources_root: Path) -> None:
+def add_second_monthly_partition(spark: SparkSession, sources_root: Path) -> None:
     write_partition(
+        spark,
         sources_root,
         "credit_cards_info",
         "2024-04-30",
         [
             _build_source_row(
                 "credit_cards_info",
-                record_id="C100",
+                record_id=100,
                 loading_id=301,
                 row_hash_val="credit-20240430-C100",
                 client_income_amt=123000.0,
@@ -140,13 +209,21 @@ def add_second_monthly_partition(sources_root: Path) -> None:
     )
 
 
-def mutate_existing_partition(sources_root: Path) -> None:
-    partition_dir = sources_root / "credit_cards_info" / "report_dt='2024-03-31'"
-    pl.DataFrame(
+def mutate_existing_partition(spark: SparkSession, sources_root: Path) -> str:
+    credit_source_dir = sources_root / "credit_cards_info"
+    partition_dirs = sorted(path for path in credit_source_dir.iterdir() if path.is_dir() and not path.name.startswith("."))
+    if not partition_dirs:
+        raise FileNotFoundError(f"No credit_cards_info partitions found under {credit_source_dir}")
+
+    partition_dir = partition_dirs[-1]
+    partition_value = partition_dir.name.split("'", maxsplit=2)[1]
+    _write_rows_to_parquet(
+        spark,
+        partition_dir,
         [
             _build_source_row(
                 "credit_cards_info",
-                record_id="C100",
+                record_id=100,
                 loading_id=999,
                 row_hash_val="credit-20240331-C100-mutated",
                 client_income_amt=888888.0,
@@ -161,20 +238,7 @@ def mutate_existing_partition(sources_root: Path) -> None:
                 inf_transfer_rub_amt=1000.0,
                 cc_ever_nflag=1,
             )
-        ]
-    ).write_parquet(partition_dir / "part-00001.parquet")
-
-
-def read_partitioned_table(table_root: Path) -> pl.DataFrame:
-    parquet_files = sorted(table_root.glob("*/*.parquet"))
-    if not parquet_files:
-        return pl.DataFrame()
-    partitioned_frames: list[pl.DataFrame] = []
-    for parquet_file in parquet_files:
-        partition_name = parquet_file.parent.name
-        partition_key, partition_value = partition_name.split("=", 1)
-        partition_value = partition_value.strip("'")
-        partitioned_frames.append(
-            pl.read_parquet(parquet_file).with_columns(pl.lit(partition_value).alias(partition_key))
-        )
-    return pl.concat(partitioned_frames, how="diagonal_relaxed")
+        ],
+        mode="append",
+    )
+    return partition_value
