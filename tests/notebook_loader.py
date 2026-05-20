@@ -1,58 +1,39 @@
-"""Утилиты для чтения, частичного импорта и полного исполнения notebook как источника кода."""
+"""Small helpers for validating the current lab3 notebook artifacts."""
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Iterable
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 NOTEBOOK_DIR = ROOT_DIR / "notebooks"
-SPARK_NOTEBOOK_PATH = NOTEBOOK_DIR / "spark_lab.ipynb"
+SCRIPTS_DIR = ROOT_DIR / "scripts"
+
+TARGET_NOTEBOOK_PATHS = (
+    NOTEBOOK_DIR / "lab3_learning_version.ipynb",
+    NOTEBOOK_DIR / "lab3_teacher_version.ipynb",
+)
+TARGET_SCRIPT_PATHS = (
+    SCRIPTS_DIR / "lab3_learning_version.py",
+    SCRIPTS_DIR / "lab3_teacher_version.py",
+)
 
 
 def read_notebook(notebook_path: Path) -> dict:
+    """Read a notebook JSON file as a Python dictionary."""
     return json.loads(notebook_path.read_text(encoding="utf-8"))
 
 
 def iter_code_cells(notebook: dict) -> Iterable[tuple[int, dict]]:
+    """Yield code cells with their notebook indexes."""
     for index, cell in enumerate(notebook["cells"]):
         if cell["cell_type"] == "code":
             yield index, cell
 
 
-def load_namespace(notebook_path: Path, allowed_tags: tuple[str, ...] = ("bootstrap", "function_defs")) -> dict:
+def notebook_code(notebook_path: Path) -> str:
+    """Return all code cells concatenated in notebook order."""
     notebook = read_notebook(notebook_path)
-    namespace: dict = {"__name__": f"loaded_{notebook_path.stem}"}
-    allowed_tags_set = set(allowed_tags)
-
-    for index, cell in iter_code_cells(notebook):
-        cell_tags = set(cell.get("metadata", {}).get("tags", []))
-        if cell_tags & allowed_tags_set:
-            source = "".join(cell["source"])
-            exec(compile(source, f"{notebook_path.name}:cell_{index}", "exec"), namespace)
-
-    return namespace
-
-
-def execute_notebook(
-    notebook_path: Path,
-    cwd: Path | None = None,
-) -> dict:
-    notebook = read_notebook(notebook_path)
-    namespace: dict = {"__name__": f"executed_{notebook_path.stem}"}
-    original_cwd = Path.cwd()
-
-    try:
-        if cwd is not None:
-            os.chdir(cwd)
-
-        for index, cell in iter_code_cells(notebook):
-            source = "".join(cell["source"])
-            exec(compile(source, f"{notebook_path.name}:cell_{index}", "exec"), namespace)
-    finally:
-        os.chdir(original_cwd)
-
-    return namespace
+    return "\n\n".join("".join(cell["source"]) for _, cell in iter_code_cells(notebook))

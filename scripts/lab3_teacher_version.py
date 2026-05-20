@@ -105,7 +105,6 @@ from pyspark.sql.types import (
     IntegerType,
     LongType,
     TimestampType,
-    BooleanType,
 )
 
 DATA_DIR = find_data_dir()
@@ -192,7 +191,6 @@ SOURCE_CONFIG = {
 # Технические поля не попадают в dim_attributes как бизнес-атрибуты.
 TECHNICAL_COLUMNS = {
     "row_update_dtime",
-    "row_loading_id",
     "loading_id",
     "row_hash_val",
     "report_dt",
@@ -201,10 +199,9 @@ TECHNICAL_COLUMNS = {
 }
 
 # В реальных parquet из архива есть несколько расхождений с формулировкой задания:
-# id вместо client_id, loading_id вместо row_loading_id и опечатка nfalg вместо nflag.
+# id вместо client_id и опечатка nfalg вместо nflag.
 COLUMN_ALIASES = {
     "id": "client_id",
-    "loading_id": "row_loading_id",
     "onl_bank_active_1m_nfalg": "onl_bank_active_1m_nflag",
 }
 
@@ -250,10 +247,9 @@ DIM_SOURCES_SCHEMA = StructType([
     StructField("source_description", StringType(), True),
     StructField("update_frequency", StringType(), True),
     StructField("row_create_dtime", TimestampType(), True),
-    StructField("row_update_dtime", TimestampType(), True),
-    StructField("valid_from", StringType(), True),
     StructField("valid_to", StringType(), True),
-    StructField("is_current", BooleanType(), True),
+    StructField("valid_from", StringType(), True),
+    StructField("row_update_dtime", TimestampType(), True),
 ])
 
 DIM_ATTRIBUTES_SCHEMA = StructType([
@@ -275,7 +271,7 @@ LOAD_LOG_SCHEMA = StructType([
     StructField("load_end_dtime", TimestampType(), True),
     StructField("target_table", StringType(), False),
     StructField("load_status", StringType(), False),
-    StructField("row_loading_id", LongType(), True),
+    StructField("loading_id", LongType(), True),
     StructField("error_message", StringType(), True),
 ])
 
@@ -286,7 +282,7 @@ CLIENT_MONTHLY_SCHEMA = StructType([
     StructField("attribute_value", StringType(), True),
     StructField("source_id", IntegerType(), False),
     StructField("row_update_dtime", TimestampType(), True),
-    StructField("row_loading_id", LongType(), True),
+    StructField("loading_id", LongType(), True),
     StructField("row_hash_val", StringType(), True),
 ])
 
@@ -298,7 +294,7 @@ CLIENT_DAILY_SCHEMA = StructType([
     StructField("row_actual_to", StringType(), False),
     StructField("source_id", IntegerType(), False),
     StructField("row_update_dtime", TimestampType(), True),
-    StructField("row_loading_id", LongType(), True),
+    StructField("loading_id", LongType(), True),
     StructField("row_hash_val", StringType(), True),
 ])
 
@@ -355,8 +351,8 @@ def normalize_source_columns(df):
 
     if "client_id" in df.columns:
         df = df.withColumn("client_id", F.col("client_id").cast("string"))
-    if "row_loading_id" in df.columns:
-        df = df.withColumn("row_loading_id", F.col("row_loading_id").cast("long"))
+    if "loading_id" in df.columns:
+        df = df.withColumn("loading_id", F.col("loading_id").cast("long"))
     if "report_dt" in df.columns:
         df = df.withColumn("report_dt", F.col("report_dt").cast("string"))
     if "row_actual_from" in df.columns:
@@ -409,10 +405,9 @@ def build_dim_sources():
             cfg["source_description"],
             cfg["update_frequency"],
             now,
-            now,
-            "1900-01-01",
             "9999-12-31",
-            True,
+            "1900-01-01",
+            now,
         ))
     return spark.createDataFrame(rows, DIM_SOURCES_SCHEMA)
 
@@ -470,10 +465,10 @@ def _next_load_id(load_log_df):
     return 1 if max_load_id is None else int(max_load_id) + 1
 
 
-def _source_row_loading_id(source_df):
-    if "row_loading_id" not in source_df.columns:
+def _source_loading_id(source_df):
+    if "loading_id" not in source_df.columns:
         return None
-    value = source_df.agg(F.max("row_loading_id")).collect()[0][0]
+    value = source_df.agg(F.max("loading_id")).collect()[0][0]
     return None if value is None else int(value)
 
 
@@ -483,7 +478,7 @@ def add_load_log_record(
     source_report_dt,
     target_table,
     load_status="SUCCESS",
-    row_loading_id=None,
+    loading_id=None,
     error_message=None,
     load_start_dtime=None,
 ):
@@ -499,7 +494,7 @@ def add_load_log_record(
         load_end_dtime,
         target_table,
         load_status,
-        row_loading_id,
+        loading_id,
         error_message,
     )]
     new_df = spark.createDataFrame(new_row, LOAD_LOG_SCHEMA)
@@ -525,7 +520,7 @@ def verticalize_monthly(source_df, source_name, dim_attributes_df):
             F.expr(stack_expr),
             F.lit(source_id).cast("int").alias("source_id"),
             F.col("row_update_dtime"),
-            F.col("row_loading_id").cast("long").alias("row_loading_id"),
+            F.col("loading_id").cast("long").alias("loading_id"),
             F.col("row_hash_val"),
         )
         .join(
@@ -540,7 +535,7 @@ def verticalize_monthly(source_df, source_name, dim_attributes_df):
             "attribute_value",
             "source_id",
             "row_update_dtime",
-            "row_loading_id",
+            "loading_id",
             "row_hash_val",
         )
     )
@@ -567,7 +562,7 @@ def verticalize_daily(source_df, source_name, dim_attributes_df):
             F.col("row_actual_to").cast("string").alias("row_actual_to"),
             F.lit(source_id).cast("int").alias("source_id"),
             F.col("row_update_dtime"),
-            F.col("row_loading_id").cast("long").alias("row_loading_id"),
+            F.col("loading_id").cast("long").alias("loading_id"),
             F.col("row_hash_val"),
         )
         .join(
@@ -583,7 +578,7 @@ def verticalize_daily(source_df, source_name, dim_attributes_df):
             "row_actual_to",
             "source_id",
             "row_update_dtime",
-            "row_loading_id",
+            "loading_id",
             "row_hash_val",
         )
     )
@@ -595,7 +590,7 @@ def merge_scd1(old_df, new_df):
     window = Window.partitionBy(*key_columns).orderBy(
         F.col("_is_new").desc(),
         F.col("row_update_dtime").desc_nulls_last(),
-        F.col("row_loading_id").desc_nulls_last(),
+        F.col("loading_id").desc_nulls_last(),
     )
 
     merged = (
@@ -613,7 +608,7 @@ def merge_scd2(old_df, new_df):
     window = Window.partitionBy(*key_columns).orderBy(
         F.col("_is_new").desc(),
         F.col("row_update_dtime").desc_nulls_last(),
-        F.col("row_loading_id").desc_nulls_last(),
+        F.col("loading_id").desc_nulls_last(),
     )
 
     merged = (
@@ -708,7 +703,7 @@ def initial_load_warehouse():
             source_id=cfg["source_id"],
             source_report_dt=source_report_dt,
             target_table=target_table,
-            row_loading_id=_source_row_loading_id(source_df),
+            loading_id=_source_loading_id(source_df),
             load_start_dtime=load_start,
         )
 
@@ -736,7 +731,7 @@ def initial_load_warehouse():
             source_id=cfg["source_id"],
             source_report_dt=source_report_dt,
             target_table=target_table,
-            row_loading_id=_source_row_loading_id(source_df),
+            loading_id=_source_loading_id(source_df),
             load_start_dtime=load_start,
         )
 
@@ -790,7 +785,7 @@ def update_warehouse():
             source_id=cfg["source_id"],
             source_report_dt=source_report_dt,
             target_table=target_table,
-            row_loading_id=_source_row_loading_id(source_df),
+            loading_id=_source_loading_id(source_df),
             load_start_dtime=load_start,
         )
 
@@ -818,7 +813,7 @@ def update_warehouse():
             source_id=cfg["source_id"],
             source_report_dt=source_report_dt,
             target_table=target_table,
-            row_loading_id=_source_row_loading_id(source_df),
+            loading_id=_source_loading_id(source_df),
             load_start_dtime=load_start,
         )
 

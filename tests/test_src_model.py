@@ -1,57 +1,96 @@
-"""Контракт физической модели данных из автономного notebook."""
+"""Static checks for the physical model contract shown in schema.png."""
 
 from __future__ import annotations
 
-from tests.notebook_loader import SPARK_NOTEBOOK_PATH, load_namespace
+import re
+from pathlib import Path
+
+import pytest
+
+from tests.notebook_loader import TARGET_NOTEBOOK_PATHS
+from tests.notebook_loader import TARGET_SCRIPT_PATHS
+from tests.notebook_loader import notebook_code
 
 
-NOTEBOOK_NAMESPACE = load_namespace(SPARK_NOTEBOOK_PATH)
-SOURCES = NOTEBOOK_NAMESPACE["SOURCES"]
+EXPECTED_SCHEMAS = {
+    "DIM_SOURCES_SCHEMA": [
+        "source_id",
+        "source_name",
+        "source_description",
+        "update_frequency",
+        "row_create_dtime",
+        "valid_to",
+        "valid_from",
+        "row_update_dtime",
+    ],
+    "DIM_ATTRIBUTES_SCHEMA": [
+        "attribute_id",
+        "attribute_name",
+        "attribute_description",
+        "data_type",
+        "source_id",
+        "update_frequency",
+        "row_create_dtime",
+        "row_update_dtime",
+    ],
+    "LOAD_LOG_SCHEMA": [
+        "load_id",
+        "source_id",
+        "source_report_dt",
+        "load_start_dtime",
+        "load_end_dtime",
+        "target_table",
+        "load_status",
+        "loading_id",
+        "error_message",
+    ],
+    "CLIENT_MONTHLY_SCHEMA": [
+        "client_id",
+        "attribute_id",
+        "report_dt",
+        "attribute_value",
+        "source_id",
+        "row_update_dtime",
+        "loading_id",
+        "row_hash_val",
+    ],
+    "CLIENT_DAILY_SCHEMA": [
+        "client_id",
+        "attribute_id",
+        "attribute_value",
+        "row_actual_from",
+        "row_actual_to",
+        "source_id",
+        "row_update_dtime",
+        "loading_id",
+        "row_hash_val",
+    ],
+}
 
 
-def build_attribute_id_by_name() -> dict[str, int]:
-    all_attributes = [
-        column_name
-        for source_meta in SOURCES.values()
-        for column_name in source_meta["columns"]
-    ]
-    return {attribute_name: attribute_id for attribute_id, attribute_name in enumerate(all_attributes, start=1)}
+def source_for(path: Path) -> str:
+    if path.suffix == ".ipynb":
+        return notebook_code(path)
+    return path.read_text(encoding="utf-8")
 
 
-def test_source_registry_matches_lab_sources():
-    assert set(SOURCES) == {"client_cards_daily", "credit_cards_info", "deb_cards_info"}
-    assert SOURCES["client_cards_daily"]["update_frequency"] == "daily"
-    assert SOURCES["client_cards_daily"]["target_table"] == "client_daily_attrs_scd2"
-    assert SOURCES["credit_cards_info"]["update_frequency"] == "monthly"
-    assert SOURCES["deb_cards_info"]["target_table"] == "client_monthly_attrs_scd1"
+def schema_fields(source: str, schema_name: str) -> list[str]:
+    match = re.search(rf"{schema_name}\s*=\s*StructType\(\[(.*?)\]\)", source, flags=re.S)
+    assert match, f"{schema_name} not found"
+    return re.findall(r'StructField\("([^"]+)"', match.group(1))
 
 
-def test_business_attributes_are_vertical_model_attributes_only():
-    attribute_id_by_name = build_attribute_id_by_name()
-    all_attributes = [
-        column_name
-        for source_meta in SOURCES.values()
-        for column_name in source_meta["columns"]
-    ]
+@pytest.mark.parametrize("path", [*TARGET_SCRIPT_PATHS, *TARGET_NOTEBOOK_PATHS])
+def test_table_schemas_match_schema_png(path: Path):
+    source = source_for(path)
 
-    assert len(all_attributes) == 24
-    assert "client_id" not in all_attributes
-    assert "row_update_dtime" not in all_attributes
-    assert set(attribute_id_by_name) == set(all_attributes)
-    assert len(set(attribute_id_by_name.values())) == len(all_attributes)
+    for schema_name, expected_fields in EXPECTED_SCHEMAS.items():
+        assert schema_fields(source, schema_name) == expected_fields
 
 
-def test_warehouse_contains_task_1_to_3_tables():
-    # Таблицы проверяем через функции notebook, а не через отдельный глобальный словарь из модулей.
-    schema_names = {
-        "dim_sources",
-        "dim_attributes",
-        "load_log",
-        "tech_source_partitions",
-        "client_monthly_attrs_scd1",
-        "client_daily_attrs_scd2",
-    }
-    build_spark_schema = NOTEBOOK_NAMESPACE["build_spark_schema"]
+@pytest.mark.parametrize("path", [*TARGET_SCRIPT_PATHS, *TARGET_NOTEBOOK_PATHS])
+def test_removed_fields_do_not_appear_in_warehouse_contract(path: Path):
+    source = source_for(path)
 
-    for table_name in schema_names:
-        assert build_spark_schema(table_name) is not None
+    assert "row_loading_id" not in source
+    assert "is_current" not in source

@@ -26,7 +26,6 @@
 - `dim_sources` — справочник источников;
 - `dim_attributes` — справочник атрибутов;
 - `load_log` — append-only журнал загрузок;
-- `tech_source_partitions` — техническое состояние уже обработанных партиций;
 - `client_monthly_attrs_scd1` — monthly EAV-витрина, партиция `report_dt`;
 - `client_daily_attrs_scd2` — daily EAV-витрина, партиция `row_actual_to`.
 
@@ -72,9 +71,12 @@ uv sync
 env UV_CACHE_DIR=/private/tmp/uv-cache uv run --python 3.12 pytest tests -q
 ```
 
-### Spark notebook
+### Lab3 notebooks
 
-Файл: [notebooks/spark_lab.ipynb](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/notebooks/spark_lab.ipynb)
+Файлы:
+
+- [notebooks/lab3_learning_version.ipynb](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/notebooks/lab3_learning_version.ipynb)
+- [notebooks/lab3_teacher_version.ipynb](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/notebooks/lab3_teacher_version.ipynb)
 
 Требования:
 
@@ -85,11 +87,10 @@ env UV_CACHE_DIR=/private/tmp/uv-cache uv run --python 3.12 pytest tests -q
 ## Что проверяется тестами
 
 - корректность разрешения путей запуска;
-- корректность распознавания source partitions;
-- стабильность manifest fingerprint;
-- корректность wide-to-EAV трансформаций;
-- идемпотентность `new / skip / fail`;
-- полное исполнение Spark-контура и notebook-структуры.
+- соответствие физических схем `schema.png`;
+- корректность wide-to-EAV трансформаций на уровне контракта;
+- синхронность script/notebook-версий;
+- компилируемость Python-кода и notebook-структуры.
 
 ## Связанные документы
 

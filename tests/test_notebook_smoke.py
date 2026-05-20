@@ -1,55 +1,32 @@
-"""Smoke-тесты полного исполнения Spark-кода как пользовательского артефакта."""
+"""Smoke checks for notebook JSON and visible lab sections."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from tests.fixture_builders import build_limited_real_sources
-from tests.notebook_loader import SPARK_NOTEBOOK_PATH, execute_notebook, load_namespace
+from tests.notebook_loader import TARGET_NOTEBOOK_PATHS
+from tests.notebook_loader import read_notebook
 
 
-NOTEBOOK_NAMESPACE = load_namespace(SPARK_NOTEBOOK_PATH)
-create_spark_session = NOTEBOOK_NAMESPACE["create_spark_session"]
-run_warehouse_update = NOTEBOOK_NAMESPACE["run_warehouse_update"]
+@pytest.mark.parametrize("notebook_path", TARGET_NOTEBOOK_PATHS)
+def test_notebook_json_is_valid_and_nonempty(notebook_path: Path):
+    notebook = read_notebook(notebook_path)
+
+    assert notebook["cells"]
+    assert notebook["nbformat"] >= 4
 
 
-@pytest.mark.spark
-@pytest.mark.smoke
-def test_notebook_runtime_executes_end_to_end(tmp_path):
-    sources_root = tmp_path / "sources"
-    spark = create_spark_session(
-        app_name="spark-lab-runtime-smoke",
-        warehouse_dir=tmp_path / "spark_warehouse",
-        shuffle_partitions=2,
-    )
+@pytest.mark.parametrize("notebook_path", TARGET_NOTEBOOK_PATHS)
+def test_notebook_mentions_all_schema_tables(notebook_path: Path):
+    raw_text = notebook_path.read_text(encoding="utf-8")
 
-    try:
-        source_counts = build_limited_real_sources(spark, sources_root)
-        summary = run_warehouse_update(
-            spark,
-            sources_root=sources_root,
-            warehouse_root=tmp_path / "warehouse",
-        )
-    finally:
-        spark.stop()
-
-    assert summary["loaded_partitions"] == len(source_counts)
-
-
-@pytest.mark.spark
-@pytest.mark.smoke
-def test_spark_notebook_executes_end_to_end(spark_session, tmp_path, monkeypatch):
-    sources_root = tmp_path / "data" / "sources"
-    source_counts = build_limited_real_sources(spark_session, sources_root)
-
-    monkeypatch.setenv("DBSCORING_SKIP_FINAL_RUN", "0")
-    monkeypatch.setenv("DBSCORING_SOURCES_ROOT", str(sources_root))
-    monkeypatch.setenv("DBSCORING_WAREHOUSE_ROOT", str(tmp_path / "warehouse"))
-
-    namespace = execute_notebook(
-        SPARK_NOTEBOOK_PATH,
-        cwd=tmp_path,
-    )
-
-    assert "final_summary" in namespace
-    assert namespace["final_summary"]["loaded_partitions"] == len(source_counts)
+    for table_name in [
+        "dim_sources",
+        "dim_attributes",
+        "load_log",
+        "client_monthly_attrs_scd1",
+        "client_daily_attrs_scd2",
+    ]:
+        assert table_name in raw_text

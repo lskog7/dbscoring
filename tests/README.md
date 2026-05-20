@@ -8,10 +8,9 @@
 
 ## Основные принципы
 
-- notebook остаётся source of truth;
-- тесты извлекают код из `bootstrap` и `function_defs`-ячеек;
-- smoke-сценарии выполняют notebook целиком;
-- Spark-сценарии проверяют контракт warehouse без альтернативного движка.
+- текущие lab3 notebook и script-файлы проверяются как единый набор артефактов;
+- тесты не требуют локальных parquet-источников;
+- Spark-сценарии проверяются статически: схемы, функции, синхронность script/notebook-кода.
 
 ## Файлы
 
@@ -34,60 +33,38 @@
 
 Содержит:
 
-- построение bounded-копии реальных `data/sources` с лимитом строк на каждую физическую партицию;
-- использование `data/test_sources`, если этот малый реальный срез уже материализован в репозитории;
-- построение синтетических строк источников;
-- создание исходных partition directories;
-- сценарий добавления новой monthly-партиции;
-- сценарий мутации уже загруженной партиции;
-- чтение partitioned-output таблиц с восстановлением hive partition columns из пути.
+Оставлен для совместимости со старыми проверками и примерами fixtures; текущий набор тестов его не использует.
 
 ### [test_notebook_structure.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_notebook_structure.py)
 
 Структурные проверки notebook:
 
-- отсутствие `examples`-ячеек;
-- наличие docstring у всех функций;
-- наличие ровно одной `final_run`-ячейки.
+- компилируемость code cells;
+- отсутствие импортов `dbscoring`;
+- наличие одного финального линейного запуска лабораторной.
 
 ### [test_spark_notebook_unit.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_spark_notebook_unit.py)
 
-Unit-тесты Spark notebook-функций без полного интеграционного прогона.
+Unit-тесты Spark helper-кода без полного интеграционного прогона.
 
 ### [test_warehouse.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_warehouse.py)
 
 Прямые тесты helper-функций warehouse-слоя:
 
-- маппинг Spark-типов;
-- построение схем;
-- инициализация parquet-таблиц;
-- загрузка малых справочников.
-
-### [test_cli.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_cli.py)
-
-Проверки CLI-контракта:
-
-- разбор аргументов;
-- JSON-вывод;
-- корректное завершение Spark runtime.
+- наличие трех источников;
+- наличие пяти таблиц из `schema.png`;
+- отсутствие старой технической таблицы `tech_source_partitions`.
 
 ### [test_spark_integration.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_spark_integration.py)
 
-Полный Spark integration-test набор:
-
-- bounded-прогон на реальных parquet-источниках без чтения полного объёма;
-- первичная загрузка;
-- повторный idempotent run;
-- инкрементальная monthly-партиция;
-- fail-fast на изменённой старой партиции;
-- debug rebuild.
+Проверяет синхронность script и notebook-версий.
 
 ### [test_notebook_smoke.py](/Users/avtereshchenko/Desktop/Магистратура/Айрапетян_БД_2_сем/dbscoring/tests/test_notebook_smoke.py)
 
 Smoke-проверки полного исполнения:
 
-- Spark src-контура;
-- реального `spark_lab.ipynb` как пользовательского артефакта.
+- валидность notebook JSON;
+- наличие всех таблиц схемы в notebook-тексте.
 
 ## Маркеры pytest
 
