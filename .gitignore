@@ -235,4 +235,5 @@ data.zip
 data/
 models/
 warehouse/
+warehouse_polars/
 source/
