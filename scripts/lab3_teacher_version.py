@@ -32,10 +32,21 @@ def init_spark(app_name="lab3_credit_scoring_warehouse"):
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyspark"])
         from pyspark.sql import SparkSession
 
+    active_session = SparkSession.getActiveSession()
+    if active_session is not None:
+        try:
+            active_session.stop()
+        except Exception:
+            pass
+
     spark_session = (
         SparkSession.builder
         .appName(app_name)
-        .master("local[*]")
+        .master("local[2]")
+        .config("spark.driver.memory", "4g")
+        .config("spark.executor.memory", "4g")
+        .config("spark.sql.shuffle.partitions", "8")
+        .config("spark.default.parallelism", "8")
         .getOrCreate()
     )
     spark_session.sparkContext.setLogLevel("ERROR")
@@ -47,19 +58,26 @@ def _contains_source_dirs(path):
     return path.exists() and all((path / name).is_dir() for name in SOURCE_NAMES)
 
 
+def _candidate_base_dirs():
+    """Возвращает рабочую директорию, ее родителей и стандартные внешние корни."""
+    base_dirs = []
+    for root in [Path.cwd(), *Path.cwd().parents, Path("/content"), Path("/mnt/data")]:
+        if root.exists() and root not in base_dirs:
+            base_dirs.append(root)
+    return base_dirs
+
+
 def find_data_dir():
     """Находит директорию, внутри которой лежат три исходника с parquet-партициями."""
-    candidates = [
-        Path("/data"),
-        Path("data"),
-        Path("source/sources"),
-        Path("source"),
-        Path("/content/data"),
-        Path("/content/source/sources"),
-        Path("/content/source"),
-        Path("/mnt/data/source/sources"),
-        Path("/mnt/data/source"),
-    ]
+    candidates = [Path("/data")]
+    for base_dir in _candidate_base_dirs():
+        candidates.extend(
+            [
+                base_dir / "data",
+                base_dir / "source" / "sources",
+                base_dir / "source",
+            ]
+        )
 
     for candidate in candidates:
         if _contains_source_dirs(candidate):
@@ -78,12 +96,7 @@ def find_data_dir():
                 archive.extractall(extract_to)
             break
 
-    search_roots = []
-    for root in [Path.cwd(), Path("/content"), Path("/mnt/data")]:
-        if root.exists() and root not in search_roots:
-            search_roots.append(root)
-
-    for root in search_roots:
+    for root in _candidate_base_dirs():
         for path in root.rglob("*"):
             if path.is_dir() and _contains_source_dirs(path):
                 return path.resolve()
@@ -515,12 +528,12 @@ def verticalize_monthly(source_df, source_name, dim_attributes_df):
     vertical_df = (
         source_df
         .select(
-            F.col("client_id").cast("string").alias("client_id"),
-            F.col("report_dt").cast("string").alias("report_dt"),
+            F.col("client_id").cast("string"),
+            F.col("report_dt").cast("string"),
             F.expr(stack_expr),
             F.lit(source_id).cast("int").alias("source_id"),
             F.col("row_update_dtime"),
-            F.col("loading_id").cast("long").alias("loading_id"),
+            F.col("loading_id").cast("long"),
             F.col("row_hash_val"),
         )
         .join(
@@ -530,7 +543,7 @@ def verticalize_monthly(source_df, source_name, dim_attributes_df):
         )
         .select(
             "client_id",
-            F.col("attribute_id").cast("int").alias("attribute_id"),
+            F.col("attribute_id").cast("int"),
             "report_dt",
             "attribute_value",
             "source_id",
@@ -556,13 +569,13 @@ def verticalize_daily(source_df, source_name, dim_attributes_df):
     vertical_df = (
         source_df
         .select(
-            F.col("client_id").cast("string").alias("client_id"),
+            F.col("client_id").cast("string"),
             F.expr(stack_expr),
-            F.col("row_actual_from").cast("string").alias("row_actual_from"),
-            F.col("row_actual_to").cast("string").alias("row_actual_to"),
+            F.col("row_actual_from").cast("string"),
+            F.col("row_actual_to").cast("string"),
             F.lit(source_id).cast("int").alias("source_id"),
             F.col("row_update_dtime"),
-            F.col("loading_id").cast("long").alias("loading_id"),
+            F.col("loading_id").cast("long"),
             F.col("row_hash_val"),
         )
         .join(
@@ -572,7 +585,7 @@ def verticalize_daily(source_df, source_name, dim_attributes_df):
         )
         .select(
             "client_id",
-            F.col("attribute_id").cast("int").alias("attribute_id"),
+            F.col("attribute_id").cast("int"),
             "attribute_value",
             "row_actual_from",
             "row_actual_to",
@@ -739,6 +752,10 @@ def initial_load_warehouse():
     write_table(daily_df, "client_daily_attrs_scd2")
     write_table(load_log_df, "load_log")
 
+    monthly_df = read_table_if_exists("client_monthly_attrs_scd1")
+    daily_df = read_table_if_exists("client_daily_attrs_scd2")
+    load_log_df = read_table_if_exists("load_log")
+
     show_table_info(monthly_df, "client_monthly_attrs_scd1")
     show_table_info(daily_df, "client_daily_attrs_scd2")
     show_table_info(load_log_df, "load_log")
@@ -820,6 +837,10 @@ def update_warehouse():
     write_table(monthly_df, "client_monthly_attrs_scd1")
     write_table(daily_df, "client_daily_attrs_scd2")
     write_table(load_log_df, "load_log")
+
+    monthly_df = read_table_if_exists("client_monthly_attrs_scd1")
+    daily_df = read_table_if_exists("client_daily_attrs_scd2")
+    load_log_df = read_table_if_exists("load_log")
 
     show_table_info(monthly_df, "client_monthly_attrs_scd1")
     show_table_info(daily_df, "client_daily_attrs_scd2")
