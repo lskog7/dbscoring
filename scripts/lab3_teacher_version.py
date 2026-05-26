@@ -1,14 +1,3 @@
-# %% [markdown]
-# # Секция 1. Назначение работы
-#
-# Реализуются только пункты 1–3 лабораторной работы: физическая модель данных, хранилище и процессы обновления данных в Apache Spark. ML, подготовка признаков, EDA, Airflow, streaming, cron и сложная архитектура не используются.
-
-# %% [markdown]
-# # Секция 2. Инициализация Spark и путей
-#
-# Запускаем локальную Spark-сессию, ищем папку с исходными parquet-данными и задаем директорию хранилища `warehouse/`.
-
-# %%
 import os
 import shutil
 import subprocess
@@ -127,12 +116,6 @@ print(f"DATA_DIR = {DATA_DIR}")
 print(f"WAREHOUSE_DIR = {Path(WAREHOUSE_DIR).resolve()}")
 
 
-# %% [markdown]
-# # Секция 3. Описание исходных источников
-#
-# Фиксируем три источника, их партиции для первой и второй загрузки, бизнес-колонки и технические поля.
-
-# %%
 SOURCE_CONFIG = {
     "deb_cards_info": {
         "source_id": 1,
@@ -248,12 +231,6 @@ MONTHLY_SOURCES = ["deb_cards_info", "credit_cards_info"]
 DAILY_SOURCE = "client_cards_daily"
 
 
-# %% [markdown]
-# # Секция 4. Создание схем 5 таблиц хранилища
-#
-# Задаем физические схемы таблиц: два справочника, журнал загрузок и две вертикальные таблицы клиентских атрибутов.
-
-# %%
 DIM_SOURCES_SCHEMA = StructType([
     StructField("source_id", IntegerType(), False),
     StructField("source_name", StringType(), False),
@@ -322,12 +299,6 @@ TABLE_SCHEMAS = {
 TABLE_NAMES = list(TABLE_SCHEMAS.keys())
 
 
-# %% [markdown]
-# # Секция 5. Вспомогательные функции
-#
-# Функции отвечают за чтение партиций, запись parquet-таблиц, вертикализацию, проверку повторной загрузки и простые проверки качества.
-
-# %%
 def table_path(table_name):
     return Path(WAREHOUSE_DIR) / table_name
 
@@ -598,41 +569,182 @@ def verticalize_daily(source_df, source_name, dim_attributes_df):
     return vertical_df
 
 
-def merge_scd1(old_df, new_df):
-    key_columns = ["client_id", "attribute_id", "report_dt"]
-    window = Window.partitionBy(*key_columns).orderBy(
-        F.col("_is_new").desc(),
-        F.col("row_update_dtime").desc_nulls_last(),
-        F.col("loading_id").desc_nulls_last(),
+def merge_scd1(old_df, new_df, business_key_columns=None):
+    """
+    SCD1 merge:
+    - если ключ есть в old_df и new_df, берем строку из new_df;
+    - если ключ есть только в old_df, оставляем old_df;
+    - если ключ есть только в new_df, добавляем new_df.
+    """
+    if business_key_columns is None:
+        business_key_columns = ["client_id", "attribute_id"]
+
+    def assert_unique_keys(df, df_name):
+        duplicate_keys = df.groupBy(*business_key_columns).count().filter(F.col("count") > 1)
+        examples = duplicate_keys.limit(5).collect()
+        if examples:
+            formatted_examples = [
+                {column: row[column] for column in business_key_columns} | {"count": row["count"]}
+                for row in examples
+            ]
+            raise ValueError(
+                f"{df_name} contains duplicate SCD1 business keys "
+                f"{business_key_columns}: {formatted_examples}"
+            )
+
+    missing_old_columns = set(new_df.columns) - set(old_df.columns)
+    missing_new_columns = set(old_df.columns) - set(new_df.columns)
+    if missing_old_columns or missing_new_columns:
+        raise ValueError(
+            "old_df and new_df must have the same columns. "
+            f"Only in new_df: {sorted(missing_old_columns)}. "
+            f"Only in old_df: {sorted(missing_new_columns)}."
+        )
+
+    assert_unique_keys(old_df, "old_df")
+    assert_unique_keys(new_df, "new_df")
+
+    updated_keys_df = new_df.select(*business_key_columns).distinct()
+    unchanged_old_df = old_df.join(updated_keys_df, on=business_key_columns, how="left_anti")
+
+    return unchanged_old_df.unionByName(new_df.select(old_df.columns)).select(old_df.columns)
+
+
+def merge_scd2(
+    old_df,
+    new_df,
+    business_key_columns=None,
+    valid_from_col="row_actual_from",
+    valid_to_col="row_actual_to",
+    current_valid_to_value="9999-12-31",
+    compare_columns=None,
+):
+    """
+    SCD2 merge с полуоткрытым интервалом [row_actual_from, row_actual_to):
+    - если бизнес-ключа нет в old_df, вставляем новую версию;
+    - если текущая версия есть и атрибут изменился, закрываем старую версию и вставляем новую;
+    - если текущая версия есть и атрибут не изменился, оставляем old_df без изменений;
+    - исторические строки old_df не меняем.
+    """
+    if business_key_columns is None:
+        business_key_columns = ["client_id", "attribute_id"]
+    business_key_columns = list(business_key_columns)
+
+    if compare_columns is None:
+        compare_columns = ["attribute_value"]
+    else:
+        compare_columns = list(compare_columns)
+
+    old_columns = old_df.columns
+    old_types = {field.name: field.dataType for field in old_df.schema.fields}
+
+    required_old_columns = set(business_key_columns + [valid_from_col, valid_to_col])
+    missing_old_columns = required_old_columns - set(old_df.columns)
+    if missing_old_columns:
+        raise ValueError(f"old_df does not contain required columns: {sorted(missing_old_columns)}")
+
+    required_new_columns = set(business_key_columns + [valid_from_col] + compare_columns)
+    missing_new_columns = required_new_columns - set(new_df.columns)
+    if missing_new_columns:
+        raise ValueError(f"new_df does not contain required columns: {sorted(missing_new_columns)}")
+
+    def assert_unique_keys(df, key_columns, df_name):
+        duplicate_keys = df.groupBy(*key_columns).count().filter(F.col("count") > 1).limit(5).collect()
+        if duplicate_keys:
+            formatted_examples = [
+                {column: row[column] for column in key_columns} | {"count": row["count"]}
+                for row in duplicate_keys
+            ]
+            raise ValueError(f"{df_name} contains duplicate keys {list(key_columns)}: {formatted_examples}")
+
+    assert_unique_keys(old_df, business_key_columns + [valid_from_col], "old_df")
+    assert_unique_keys(new_df, business_key_columns, "new_df")
+
+    new_prepared_df = new_df
+    if valid_to_col not in new_prepared_df.columns:
+        new_prepared_df = new_prepared_df.withColumn(
+            valid_to_col,
+            F.lit(current_valid_to_value).cast(old_types[valid_to_col]),
+        )
+
+    missing_columns_after_prepare = set(old_columns) - set(new_prepared_df.columns)
+    if missing_columns_after_prepare:
+        raise ValueError(
+            "new_df cannot be aligned to old_df, missing columns: "
+            f"{sorted(missing_columns_after_prepare)}"
+        )
+
+    new_prepared_df = new_prepared_df.select(
+        *[F.col(column).cast(old_types[column]).alias(column) for column in old_columns]
     )
 
-    merged = (
-        old_df.withColumn("_is_new", F.lit(0))
-        .unionByName(new_df.withColumn("_is_new", F.lit(1)))
-        .withColumn("_rn", F.row_number().over(window))
-        .filter(F.col("_rn") == 1)
-        .drop("_rn", "_is_new")
+    def make_hash(columns):
+        if not columns:
+            return F.lit("__no_compare_columns__")
+        return F.sha2(F.to_json(F.struct(*[F.col(column).alias(column) for column in columns])), 256)
+
+    current_condition = F.col(valid_to_col).isNull() | (F.col(valid_to_col) == current_valid_to_value)
+    old_current_df = old_df.filter(current_condition)
+    old_history_df = old_df.filter(~current_condition)
+
+    assert_unique_keys(old_current_df, business_key_columns, "old_df current records")
+
+    old_current_with_hash_df = (
+        old_current_df
+        .withColumn("__old_hash", make_hash(compare_columns))
+        .withColumn("__old_exists", F.lit(True))
     )
-    return merged.select(old_df.columns)
-
-
-def merge_scd2(old_df, new_df):
-    key_columns = ["client_id", "attribute_id", "row_actual_from"]
-    window = Window.partitionBy(*key_columns).orderBy(
-        F.col("_is_new").desc(),
-        F.col("row_update_dtime").desc_nulls_last(),
-        F.col("loading_id").desc_nulls_last(),
+    new_with_hash_df = (
+        new_prepared_df
+        .withColumn("__new_hash", make_hash(compare_columns))
+        .withColumn("__new_exists", F.lit(True))
     )
 
-    merged = (
-        old_df.withColumn("_is_new", F.lit(0))
-        .unionByName(new_df.withColumn("_is_new", F.lit(1)))
-        .withColumn("_rn", F.row_number().over(window))
-        .filter(F.col("_rn") == 1)
-        .drop("_rn", "_is_new")
-    )
-    return merged.select(old_df.columns)
+    joined_df = old_current_with_hash_df.join(new_with_hash_df, on=business_key_columns, how="full_outer")
 
+    changed_keys_df = (
+        joined_df
+        .filter(
+            F.col("__old_exists").isNotNull()
+            & F.col("__new_exists").isNotNull()
+            & (F.col("__old_hash") != F.col("__new_hash"))
+        )
+        .select(*business_key_columns)
+        .distinct()
+    )
+
+    new_only_keys_df = (
+        joined_df
+        .filter(F.col("__old_exists").isNull() & F.col("__new_exists").isNotNull())
+        .select(*business_key_columns)
+        .distinct()
+    )
+    insert_keys_df = changed_keys_df.unionByName(new_only_keys_df).distinct()
+
+    changed_new_from_df = (
+        new_prepared_df
+        .join(changed_keys_df, on=business_key_columns, how="inner")
+        .select(*business_key_columns, F.col(valid_from_col).alias("__new_valid_from"))
+    )
+
+    expired_old_current_df = (
+        old_current_df
+        .join(changed_new_from_df, on=business_key_columns, how="inner")
+        .withColumn(valid_to_col, F.col("__new_valid_from").cast(old_types[valid_to_col]))
+        .drop("__new_valid_from")
+    )
+
+    unchanged_old_current_df = old_current_df.join(changed_keys_df, on=business_key_columns, how="left_anti")
+    new_versions_df = new_prepared_df.join(insert_keys_df, on=business_key_columns, how="inner")
+
+    result_df = (
+        old_history_df.select(*old_columns)
+        .unionByName(unchanged_old_current_df.select(*old_columns))
+        .unionByName(expired_old_current_df.select(*old_columns))
+        .unionByName(new_versions_df.select(*old_columns))
+    )
+
+    return result_df.select(*old_columns)
 
 def check_duplicates(df, key_columns, table_name):
     duplicates = df.groupBy(*key_columns).count().filter(F.col("count") > 1)
@@ -648,12 +760,6 @@ def show_table_info(df, table_name, n=10):
     df.show(n, truncate=False)
 
 
-# %% [markdown]
-# # Секция 6. create_warehouse()
-#
-# Создаем пустое хранилище и заполняем справочники `dim_sources` и `dim_attributes`.
-
-# %%
 def create_warehouse():
     """Создает пять parquet-таблиц хранилища в директории warehouse/."""
     Path(WAREHOUSE_DIR).mkdir(parents=True, exist_ok=True)
@@ -675,12 +781,6 @@ def create_warehouse():
     print("Пустое хранилище создано.")
 
 
-# %% [markdown]
-# # Секция 7. initial_load_warehouse()
-#
-# Первая загрузка читает февральские месячные партиции и начальную дневную партицию.
-
-# %%
 def initial_load_warehouse():
     """Выполняет первую загрузку начальных партиций в хранилище."""
     print("\n=== Первая загрузка хранилища ===")
@@ -761,12 +861,6 @@ def initial_load_warehouse():
     show_table_info(load_log_df, "load_log")
 
 
-# %% [markdown]
-# # Секция 8. update_warehouse()
-#
-# Вторая загрузка читает мартовские месячные партиции и актуальную дневную партицию. Перед загрузкой используется `load_log`.
-
-# %%
 def update_warehouse():
     """Выполняет вторую загрузку и не загружает уже обработанные партиции повторно."""
     print("\n=== Вторая загрузка хранилища ===")
@@ -847,12 +941,6 @@ def update_warehouse():
     show_table_info(load_log_df, "load_log")
 
 
-# %% [markdown]
-# # Секция 9. Проверки результата
-#
-# Проверяем количество строк, наличие `source_id`, отсутствие `null` в `attribute_id`, отсутствие дублей по ключам и журнал загрузок.
-
-# %%
 def run_simple_checks():
     """Показывает простые проверки результата лабораторной."""
     print("\n=== Проверки результата ===")
@@ -906,20 +994,8 @@ def run_simple_checks():
     load_log_df.orderBy("load_id").show(truncate=False)
 
 
-# %% [markdown]
-# ## Запуск всех шагов
-#
-# Основной сценарий запуска остается линейным и коротким.
-
-# %%
 # Полный линейный запуск лабораторной работы.
 create_warehouse()
 initial_load_warehouse()
 update_warehouse()
 run_simple_checks()
-
-
-# %% [markdown]
-# # Секция 10. Краткое объяснение результата
-#
-# В результате создаются 5 parquet-таблиц в `warehouse/`. Месячные источники записываются в вертикальную SCD1-таблицу, дневной источник – в вертикальную SCD2-таблицу. Повторная загрузка той же партиции блокируется через `load_log`.
